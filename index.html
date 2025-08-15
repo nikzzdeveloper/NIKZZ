@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Status Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root {
+            --online: #4CAF50;
+            --offline: #F44336;
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --text: #333333;
+            --text-light: #777777;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            max-width: 100%;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .header p {
+            color: var(--text-light);
+            margin-top: 0;
+            font-size: 14px;
+        }
+
+        .stats-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            width: 100%;
+        }
+
+        .stats-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            min-width: 100px;
+            flex: 1;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .stat-card h3 {
+            margin-top: 0;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        .progress-container {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 10px;
+            position: relative;
+        }
+
+        .progress-circle {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .progress-circle-bg {
+            fill: none;
+            stroke: #e0e0e0;
+            stroke-width: 6;
+        }
+
+        .progress-circle-fill {
+            fill: none;
+            stroke-width: 6;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.8s ease;
+        }
+
+        .online-fill {
+            stroke: var(--online);
+        }
+
+        .offline-fill {
+            stroke: var(--offline);
+        }
+
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 5px;
+        }
+
+        .divider {
+            border-top: 1px solid #e0e0e0;
+            margin: 20px 0;
+        }
+
+        .user-list {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            width: 100%;
+        }
+
+        .user-list h2 {
+            margin-top: 0;
+            font-weight: 500;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .users-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            width: 100%;
+        }
+
+        .user-card {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .user-name {
+            font-weight: 500;
+            font-size: 12px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+        }
+
+        .user-status {
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-indicator {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+
+        .online {
+            background: var(--online);
+        }
+
+        .offline {
+            background: var(--offline);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            width: 90%;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .close-modal {
+            float: right;
+            cursor: pointer;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .user-detail-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: #ddd;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            font-size: 24px;
+        }
+
+        .detail-row {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .detail-label {
+            font-weight: 500;
+            color: var(--text-light);
+        }
+
+        .detail-value {
+            margin-left: 8px;
+        }
+
+        .status-badge {
+            padding: 3px 6px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-online {
+            background: rgba(76, 175, 80, 0.1);
+            color: var(--online);
+        }
+
+        .badge-offline {
+            background: rgba(244, 67, 54, 0.1);
+            color: var(--offline);
+        }
+
+        .device-id {
+            font-size: 12px;
+            color: var(--text-light);
+            word-break: break-all;
+            margin-top: 5px;
+        }
+
+        @media (min-width: 480px) {
+            .stats-container {
+                gap: 15px;
+            }
+            
+            .stat-card {
+                padding: 20px;
+                min-width: 120px;
+            }
+            
+            .progress-container {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .progress-text {
+                font-size: 22px;
+            }
+            
+            .user-card {
+                padding: 15px;
+            }
+            
+            .users-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .dashboard {
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            
+            .stats-container {
+                gap: 20px;
+            }
+            
+            .stat-card {
+                min-width: 150px;
+            }
+            
+            .progress-container {
+                width: 120px;
+                height: 120px;
+            }
+            
+            .progress-text {
+                font-size: 24px;
+            }
+            
+            .users-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>Device Activity Dashboard</h1>
+            <p>Real-time monitoring of device online/offline status</p>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Online Devices</h3>
+                <div class="progress-container">
+                    <svg class="progress-circle" viewBox="0 0 100 100">
+                        <circle class="progress-circle-bg" cx="50" cy="50" r="40"></circle>
+                        <circle class="progress-circle-fill online-fill" cx="50" cy="50" r="40" 
+                                stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                    </svg>
+                    <div class="progress-text" id="online-count">0</div>
+                </div>
+                <div class="stat-value" id="online-percentage">0%</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>Offline Devices</h3>
+                <div class="progress-container">
+                    <svg class="progress-circle" viewBox="0 0 100 100">
+                        <circle class="progress-circle-bg" cx="50" cy="50" r="40"></circle>
+                        <circle class="progress-circle-fill offline-fill" cx="50" cy="50" r="40" 
+                                stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                    </svg>
+                    <div class="progress-text" id="offline-count">0</div>
+                </div>
+                <div class="stat-value" id="offline-percentage">0%</div>
+            </div>
+
+            <div class="stat-card">
+                <h3>Total Devices</h3>
+                <div class="progress-container">
+                    <svg class="progress-circle" viewBox="0 0 100 100">
+                        <circle class="progress-circle-bg" cx="50" cy="50" r="40"></circle>
+                    </svg>
+                    <div class="progress-text" id="total-users">0</div>
+                </div>
+                <div class="stat-value">All registered devices</div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="user-list">
+            <h2>Device List</h2>
+            <div class="users-grid" id="users-container">
+                <!-- Device cards will be inserted here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="user-modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <div class="user-detail-avatar" id="detail-avatar">D</div>
+            <h2 id="detail-name">Device Name</h2>
+            
+            <div class="detail-row">
+                <span class="detail-label">Device ID:</span>
+                <span class="detail-value" id="detail-id">Unknown</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Device Info:</span>
+                <span class="detail-value" id="detail-device">Unknown</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value">
+                    <span class="status-badge" id="detail-status">Online</span>
+                </span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Last Active:</span>
+                <span class="detail-value" id="detail-last-active">Just now</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Location:</span>
+                <span class="detail-value" id="detail-location">Unknown</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">App Version:</span>
+                <span class="detail-value" id="detail-version">Unknown</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAePJ77BJfl9rrJqVk-I85nsqTTOwL7ips",
+            authDomain: "nkz-biasa-v8.firebaseapp.com",
+            databaseURL: "https://nkz-biasa-v8-default-rtdb.firebaseio.com",
+            projectId: "nkz-biasa-v8",
+            storageBucket: "nkz-biasa-v8.firebasestorage.app",
+            messagingSenderId: "858337107887",
+            appId: "1:858337107887:android:8889f5d10d7ac07eaa195a"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // DOM elements
+        const onlineCountEl = document.getElementById('online-count');
+        const offlineCountEl = document.getElementById('offline-count');
+        const totalUsersEl = document.getElementById('total-users');
+        const onlinePercentageEl = document.getElementById('online-percentage');
+        const offlinePercentageEl = document.getElementById('offline-percentage');
+        const usersContainer = document.getElementById('users-container');
+        const userModal = document.getElementById('user-modal');
+        const closeModal = document.querySelector('.close-modal');
+        
+        // Progress circles
+        const onlineProgress = document.querySelector('.online-fill');
+        const offlineProgress = document.querySelector('.offline-fill');
+        const circumference = 2 * Math.PI * 40;
+
+        // Set initial progress
+        onlineProgress.style.strokeDashoffset = circumference;
+        offlineProgress.style.strokeDashoffset = circumference;
+
+        // Update progress circle
+        function updateProgress(circle, percent) {
+            const offset = circumference - (percent / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+
+        // Sample data (will be replaced with real data from Firebase)
+        let users = {};
+        let onlineCount = 0;
+        let offlineCount = 0;
+        let totalUsers = 0;
+
+        // Format timestamp
+        function formatTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            
+            const now = Date.now();
+            const diff = now - timestamp;
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) return `${days} day${days > 1 ? 's' : ''} ago`;
+            if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+            if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+            if (seconds > 0) return `${seconds} second${seconds > 1 ? 's' : ''} ago`;
+            
+            return 'Just now';
+        }
+
+        // Render device cards
+        function renderUsers() {
+            usersContainer.innerHTML = '';
+            
+            Object.entries(users).forEach(([deviceId, device]) => {
+                const userCard = document.createElement('div');
+                userCard.className = 'user-card';
+                userCard.dataset.deviceId = deviceId;
+                
+                userCard.innerHTML = `
+                    <div class="user-avatar" style="background-color: ${getRandomColor()}">${device.name ? device.name.charAt(0).toUpperCase() : 'D'}</div>
+                    <div class="user-info">
+                        <div class="user-name">${device.name || 'Unknown Device'}</div>
+                        <div class="user-status">
+                            <span class="status-indicator ${device.online ? 'online' : 'offline'}"></span>
+                            ${device.online ? 'Online' : 'Offline'}
+                        </div>
+                        <div class="device-id">${shortenDeviceId(deviceId)}</div>
+                    </div>
+                `;
+                
+                userCard.addEventListener('click', () => openUserModal(deviceId));
+                usersContainer.appendChild(userCard);
+            });
+        }
+
+        // Shorten device ID for display
+        function shortenDeviceId(id) {
+            if (!id) return '';
+            if (id.length <= 8) return id;
+            return `${id.substring(0, 4)}...${id.substring(id.length - 4)}`;
+        }
+
+        // Open device modal
+        function openUserModal(deviceId) {
+            const device = users[deviceId];
+            if (!device) return;
+            
+            document.getElementById('detail-avatar').textContent = device.name ? device.name.charAt(0).toUpperCase() : 'D';
+            document.getElementById('detail-avatar').style.backgroundColor = getRandomColor();
+            document.getElementById('detail-name').textContent = device.name || 'Unknown Device';
+            document.getElementById('detail-id').textContent = deviceId;
+            document.getElementById('detail-status').textContent = device.online ? 'Online' : 'Offline';
+            document.getElementById('detail-status').className = `status-badge ${device.online ? 'badge-online' : 'badge-offline'}`;
+            document.getElementById('detail-last-active').textContent = formatTime(device.lastActive);
+            document.getElementById('detail-device').textContent = device.device || 'Unknown';
+            document.getElementById('detail-location').textContent = device.location || 'Unknown';
+            document.getElementById('detail-version').textContent = device.appVersion || 'Unknown';
+            
+            userModal.style.display = 'flex';
+        }
+
+        // Close modal
+        closeModal.addEventListener('click', () => {
+            userModal.style.display = 'none';
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', (e) => {
+            if (e.target === userModal) {
+                userModal.style.display = 'none';
+            }
+        });
+
+        // Generate random color for avatar
+        function getRandomColor() {
+            const colors = [
+                '#FF5733', '#33FF57', '#3357FF', '#F333FF', 
+                '#33FFF5', '#FF33A8', '#A833FF', '#33FFBD'
+            ];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Fetch data from Firebase
+        function fetchData() {
+            // Listen for changes in device status
+            database.ref('deviceStatus').on('value', (snapshot) => {
+                users = snapshot.val() || {};
+                totalUsers = Object.keys(users).length;
+                onlineCount = Object.values(users).filter(device => device.online).length;
+                offlineCount = totalUsers - onlineCount;
+                
+                // Update UI
+                onlineCountEl.textContent = onlineCount;
+                offlineCountEl.textContent = offlineCount;
+                totalUsersEl.textContent = totalUsers;
+                
+                const onlinePercent = totalUsers > 0 ? Math.round((onlineCount / totalUsers) * 100) : 0;
+                const offlinePercent = totalUsers > 0 ? Math.round((offlineCount / totalUsers) * 100) : 0;
+                
+                onlinePercentageEl.textContent = `${onlinePercent}%`;
+                offlinePercentageEl.textContent = `${offlinePercent}%`;
+                
+                updateProgress(onlineProgress, onlinePercent);
+                updateProgress(offlineProgress, offlinePercent);
+                
+                renderUsers();
+            });
+        }
+
+        // Initialize
+        fetchData();
+    </script>
+</body>
+</html>
